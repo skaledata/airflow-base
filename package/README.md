@@ -1,8 +1,16 @@
 # skale-airflow-plugins
 
 SkaleData's Airflow extensions. Pre-installed in
-[`ghcr.io/skaledata/airflow`](https://github.com/skaledata/airflow-base);
-also installable from PyPI for customers running their own Airflow image.
+[`ghcr.io/skaledata/airflow`](https://github.com/skaledata/airflow-base). If
+you're running your own Airflow image and want to install it directly, today
+the install path is a `git+` URL:
+
+```bash
+pip install "skale-airflow-plugins @ git+https://github.com/skaledata/airflow-base.git@v0.2.1#subdirectory=package"
+```
+
+PyPI publishing is on the roadmap; until then, the git URL is the supported
+out-of-image install path.
 
 ## Namespace
 
