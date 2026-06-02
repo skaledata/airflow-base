@@ -15,7 +15,7 @@ RUN AIRFLOW_CONSTRAINTS="https://raw.githubusercontent.com/apache/airflow/constr
        --constraint "${AIRFLOW_CONSTRAINTS}" \
        "apache-airflow-providers-airbyte"
 
-COPY package/ /tmp/skaledata-airflow-plugins/
+COPY --chown=airflow:0 package/ /tmp/skaledata-airflow-plugins/
 RUN pip install --no-cache-dir /tmp/skaledata-airflow-plugins \
   && rm -rf /tmp/skaledata-airflow-plugins
 
