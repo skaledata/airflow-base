@@ -38,15 +38,40 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: network=host
 
-      - name: Build image (no push)
+      # Build the base image and load it into the local docker daemon so the
+      # downstream test below can reference it by tag.
+      - name: Build base image (load locally)
         uses: docker/build-push-action@v6
         with:
           context: .
           push: false
+          load: true
+          tags: skaledata-airflow-base:test
           platforms: linux/amd64
           build-args: |
             AIRFLOW_VERSION=3.2.2
             PYTHON_VERSION=3.12
           cache-from: type=gha,scope=airflow-3.2.2-py3.12
           cache-to: type=gha,mode=max,scope=airflow-3.2.2-py3.12
+
+      # Verify ONBUILD triggers actually pick up packages.txt + requirements.txt.
+      # The fixture has packages.txt=jq and requirements.txt=requests; if either
+      # ONBUILD step misbehaves, the downstream verification below catches it.
+      - name: Build downstream image (exercises ONBUILD)
+        run: |
+          docker build \
+            --build-arg BASE_IMAGE=skaledata-airflow-base:test \
+            -t skaledata-airflow-base:downstream-test \
+            tests/onbuild-fixture
+
+      - name: Verify packages.txt was installed via apt (jq)
+        run: docker run --rm skaledata-airflow-base:downstream-test sh -c "jq --version"
+
+      - name: Verify requirements.txt was installed via pip (requests)
+        run: docker run --rm skaledata-airflow-base:downstream-test python -c "import requests; print('requests', requests.__version__)"
+
+      - name: Verify skaledata-airflow-plugins is still importable
+        run: docker run --rm skaledata-airflow-base:downstream-test python -c "from skaledata_airflow_plugins.airbyte import SkaleDataAirbyteHook; print('plugin ok')"

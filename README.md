@@ -17,6 +17,27 @@ customer-facing tag — we don't offer Python as a user choice.
 - `apache-airflow-providers-airbyte`
 - `skaledata-airflow-plugins` — see [package/README.md](./package/README.md)
 
+## Auto-pick-up of `packages.txt` and `requirements.txt`
+
+The image's [Dockerfile](./Dockerfile) declares `ONBUILD` triggers that fire when
+a customer's downstream Dockerfile uses `FROM ghcr.io/skaledata/airflow:<tag>`.
+Before any of the customer's own instructions run, the triggers:
+
+1. Look for **`packages.txt`** alongside the customer's Dockerfile. If present,
+   every line is installed via `apt-get install --no-install-recommends`.
+2. Look for **`requirements.txt`** alongside the customer's Dockerfile. If
+   present, it's installed via `pip install --constraint <airflow-constraints>`
+   so customer deps can't break the base image's carefully-pinned dep tree.
+
+Both files are optional. The simplest customer Dockerfile is one line:
+
+```Dockerfile
+FROM ghcr.io/skaledata/airflow:3.2.2
+```
+
+Convention matches [Astronomer's Astro Runtime](https://www.astronomer.io/docs/astro/cli/develop-project/#add-python-and-os-level-packages),
+so customers migrating from Astro need zero config changes.
+
 ## Versioning
 
 Image tags are pinned to upstream Airflow versions one-to-one:
