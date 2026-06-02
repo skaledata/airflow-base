@@ -23,10 +23,10 @@ Image tags are pinned to upstream Airflow versions one-to-one:
 
 | Tag              | Airflow | Notes                                          |
 | ---------------- | ------- | ---------------------------------------------- |
-| `3.2.1`          | 3.2.1   | Mutable — always the latest plugin for 3.2.1   |
-| `3.2.1-<sha7>`   | 3.2.1   | Immutable — pin against this for prod          |
+| `3.2.2`          | 3.2.2   | Mutable — always the latest plugin for 3.2.2   |
+| `3.2.2-<sha7>`   | 3.2.2   | Immutable — pin against this for prod          |
 
-A plugin-only fix (no Airflow bump) re-publishes the mutable `3.2.1` tag and a
+A plugin-only fix (no Airflow bump) re-publishes the mutable `3.2.2` tag and a
 fresh immutable `-<sha7>`. The Airflow version doesn't move.
 
 ## Using a custom image as a SkaleData customer
@@ -35,8 +35,8 @@ If you maintain your own image (e.g. to install custom providers or DAG deps),
 swap the base:
 
 ```Dockerfile
-- FROM apache/airflow:3.2.1-python3.12
-+ FROM ghcr.io/skaledata/airflow:3.2.1
+- FROM apache/airflow:3.2.2-python3.12
++ FROM ghcr.io/skaledata/airflow:3.2.2
 ```
 
 The plugins are pre-installed and registered via Airflow entry points; no other

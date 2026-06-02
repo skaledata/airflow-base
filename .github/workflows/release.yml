@@ -31,7 +31,7 @@ jobs:
         # Add new Airflow versions here. Python version baked in matches what
         # the SkaleData control plane's compat_loader.py points at.
         include:
-          - airflow: "3.2.1"
+          - airflow: "3.2.2"
             python: "3.12"
 
     permissions:

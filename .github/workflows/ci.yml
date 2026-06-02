@@ -46,7 +46,7 @@ jobs:
           push: false
           platforms: linux/amd64
           build-args: |
-            AIRFLOW_VERSION=3.2.1
+            AIRFLOW_VERSION=3.2.2
             PYTHON_VERSION=3.12
-          cache-from: type=gha,scope=airflow-3.2.1-py3.12
-          cache-to: type=gha,mode=max,scope=airflow-3.2.1-py3.12
+          cache-from: type=gha,scope=airflow-3.2.2-py3.12
+          cache-to: type=gha,mode=max,scope=airflow-3.2.2-py3.12
