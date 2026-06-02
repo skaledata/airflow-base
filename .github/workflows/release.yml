@@ -62,12 +62,19 @@ jobs:
             echo "immutable=${IMMUTABLE}"
           } >>"${GITHUB_OUTPUT}"
 
+      - name: Set up QEMU (for arm64 cross-build)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          platforms: linux/amd64
+          # Multi-arch so local dev on Apple Silicon works (`skale af start`
+          # etc.). Customer clusters are all amd64 (GKE / EKS / AKS).
+          platforms: linux/amd64,linux/arm64
           build-args: |
             AIRFLOW_VERSION=${{ matrix.airflow }}
             PYTHON_VERSION=${{ matrix.python }}
