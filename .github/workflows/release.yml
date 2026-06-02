@@ -6,9 +6,11 @@ name: Release
 #   v0.1.0                      — full matrix (every Airflow version in the matrix below)
 #   v0.1.1-airflow3.2.1         — single-target rebuild without rev-bumping plugin
 #
-# Image tags published per (Airflow, Python) target on each release:
-#   ghcr.io/skaledata/airflow:<airflow-version>-python<python-version>          (mutable, latest plugin)
-#   ghcr.io/skaledata/airflow:<airflow-version>-python<python-version>-<sha7>   (immutable per build)
+# Image tags published per Airflow target on each release. The Python version
+# is an internal build-time pin (currently 3.12) and intentionally not part of
+# the customer-facing tag — we don't offer Python as a user choice.
+#   ghcr.io/skaledata/airflow:<airflow-version>          (mutable, latest plugin)
+#   ghcr.io/skaledata/airflow:<airflow-version>-<sha7>   (immutable per build)
 
 on:
   push:
@@ -53,8 +55,8 @@ jobs:
         id: tags
         run: |
           SHA_SHORT="${GITHUB_SHA::7}"
-          MUTABLE="${{ env.IMAGE }}:${{ matrix.airflow }}-python${{ matrix.python }}"
-          IMMUTABLE="${{ env.IMAGE }}:${{ matrix.airflow }}-python${{ matrix.python }}-${SHA_SHORT}"
+          MUTABLE="${{ env.IMAGE }}:${{ matrix.airflow }}"
+          IMMUTABLE="${{ env.IMAGE }}:${{ matrix.airflow }}-${SHA_SHORT}"
           {
             echo "mutable=${MUTABLE}"
             echo "immutable=${IMMUTABLE}"

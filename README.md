@@ -5,8 +5,11 @@ Maintained, drop-in replacement for `apache/airflow` that bakes in the
 Airflow deployment by default.
 
 ```
-ghcr.io/skaledata/airflow:<airflow-version>-python<python-version>
+ghcr.io/skaledata/airflow:<airflow-version>
 ```
+
+The Python version is pinned internally (currently 3.12) and not part of the
+customer-facing tag — we don't offer Python as a user choice.
 
 ## What's pre-installed
 
@@ -18,13 +21,13 @@ ghcr.io/skaledata/airflow:<airflow-version>-python<python-version>
 
 Image tags are pinned to upstream Airflow versions one-to-one:
 
-| Tag                         | Airflow | Python | Notes                                          |
-| --------------------------- | ------- | ------ | ---------------------------------------------- |
-| `3.2.1-python3.12`          | 3.2.1   | 3.12   | Mutable — always the latest plugin for 3.2.1   |
-| `3.2.1-python3.12-<sha7>`   | 3.2.1   | 3.12   | Immutable — pin against this for prod          |
+| Tag              | Airflow | Notes                                          |
+| ---------------- | ------- | ---------------------------------------------- |
+| `3.2.1`          | 3.2.1   | Mutable — always the latest plugin for 3.2.1   |
+| `3.2.1-<sha7>`   | 3.2.1   | Immutable — pin against this for prod          |
 
-A plugin-only fix (no Airflow bump) re-publishes the mutable `3.2.1-python3.12`
-tag and a fresh immutable `-<sha7>`. The Airflow version doesn't move.
+A plugin-only fix (no Airflow bump) re-publishes the mutable `3.2.1` tag and a
+fresh immutable `-<sha7>`. The Airflow version doesn't move.
 
 ## Using a custom image as a SkaleData customer
 
@@ -33,7 +36,7 @@ swap the base:
 
 ```Dockerfile
 - FROM apache/airflow:3.2.1-python3.12
-+ FROM ghcr.io/skaledata/airflow:3.2.1-python3.12
++ FROM ghcr.io/skaledata/airflow:3.2.1
 ```
 
 The plugins are pre-installed and registered via Airflow entry points; no other
