@@ -76,5 +76,5 @@ jobs:
       - name: Verify requirements.txt was installed via pip (requests)
         run: docker run --rm --entrypoint /bin/bash skaledata-airflow-base:downstream-test -c "python -c 'import requests; print(\"requests\", requests.__version__)'"
 
-      - name: Verify skaledata-airflow-plugins is still importable
-        run: docker run --rm --entrypoint /bin/bash skaledata-airflow-base:downstream-test -c "python -c 'from skaledata_airflow_plugins.airbyte import SkaleDataAirbyteHook; print(\"plugin ok\")'"
+      - name: Verify skale-airflow-plugins is still importable
+        run: docker run --rm --entrypoint /bin/bash skaledata-airflow-base:downstream-test -c "python -c 'from skale.providers.airbyte.hooks.airbyte import AirbyteHook; print(\"plugin ok\")'"

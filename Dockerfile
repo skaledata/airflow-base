@@ -19,9 +19,9 @@ RUN pip install --no-cache-dir \
        --constraint "${SKALEDATA_AIRFLOW_CONSTRAINTS_URL}" \
        "apache-airflow-providers-airbyte"
 
-COPY --chown=airflow:0 package/ /tmp/skaledata-airflow-plugins/
-RUN pip install --no-cache-dir /tmp/skaledata-airflow-plugins \
-  && rm -rf /tmp/skaledata-airflow-plugins
+COPY --chown=airflow:0 package/ /tmp/skale-airflow-plugins/
+RUN pip install --no-cache-dir /tmp/skale-airflow-plugins \
+  && rm -rf /tmp/skale-airflow-plugins
 
 # ----------------------------------------------------------------------------
 # ONBUILD triggers — auto-pick-up of packages.txt + requirements.txt

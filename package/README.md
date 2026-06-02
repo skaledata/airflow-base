@@ -1,19 +1,33 @@
-# skaledata-airflow-plugins
+# skale-airflow-plugins
 
-Airflow plugins published by SkaleData. Pre-installed in
+SkaleData's Airflow extensions. Pre-installed in
 [`ghcr.io/skaledata/airflow`](https://github.com/skaledata/airflow-base);
 also installable from PyPI for customers running their own Airflow image.
 
-## What's in it
+## Namespace
 
-### `SkaleDataAirbyteHook` / `SkaleDataAirbyteTriggerSyncOperator` / `SkaleDataAirbyteSyncTrigger`
+Mirrors Airflow's own provider layout
+(`airflow.providers.<name>.{hooks,operators,triggers}.<name>`) under
+`skale.providers.*`:
 
-Drop-in replacements for the upstream Airbyte provider's hook, operator, and trigger
-that authenticate via a static bearer token (the SkaleData `sdk_*` API key) instead of
-the upstream OAuth2 `/applications/token` flow.
+```python
+from skale.providers.airbyte.hooks.airbyte    import AirbyteHook
+from skale.providers.airbyte.operators.airbyte import AirbyteTriggerSyncOperator
+from skale.providers.airbyte.triggers.airbyte  import AirbyteSyncTrigger
+```
 
-SkaleData ships its managed Airbyte with `global.auth.enabled: false`. The Caddy ingress
-in front of Airbyte validates the API key at the edge, so the standard
+Subsequent SkaleData providers (`skale.providers.<other>...`) slot in here.
+
+## What's in it today
+
+### `skale.providers.airbyte` — bearer-auth shim for managed Airbyte
+
+Drop-in replacements for the upstream Airbyte provider's hook, operator, and
+trigger that authenticate via a static bearer token (your SkaleData `sdk_*` API
+key) instead of the upstream OAuth2 `/applications/token` flow.
+
+SkaleData ships its managed Airbyte with `global.auth.enabled: false`. The Caddy
+ingress in front of Airbyte validates the API key at the edge, so the standard
 `apache-airflow-providers-airbyte` connector — which only supports OAuth2 client
 credentials or no-auth — can't talk to it.
 
@@ -29,15 +43,23 @@ credentials or no-auth — can't talk to it.
 ## DAG usage
 
 ```python
-from skaledata_airflow_plugins.airbyte import SkaleDataAirbyteTriggerSyncOperator
+from datetime import datetime
+from airflow.decorators import dag
+from skale.providers.airbyte.operators.airbyte import AirbyteTriggerSyncOperator
 
-run_sync = SkaleDataAirbyteTriggerSyncOperator(
-    task_id="run_airbyte_sync",
-    airbyte_conn_id="airbyte_default",
-    connection_id="<your-airbyte-connection-id>",
-    deferrable=True,
-)
+
+@dag(start_date=datetime(2026, 1, 1), schedule=None, catchup=False)
+def run_airbyte_sync():
+    AirbyteTriggerSyncOperator(
+        task_id="sync_postgres_to_warehouse",
+        airbyte_conn_id="airbyte_default",
+        connection_id="<your-airbyte-connection-uuid>",
+        deferrable=True,
+    )
+
+
+run_airbyte_sync()
 ```
 
-Everything else (timeouts, async/deferrable modes, etc.) matches the upstream
-`AirbyteTriggerSyncOperator` API.
+`AirbyteTriggerSyncOperator` is a drop-in for the upstream
+`AirbyteTriggerSyncOperator` — same arguments, same async/deferrable semantics.

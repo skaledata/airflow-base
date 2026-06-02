@@ -1,7 +1,7 @@
 # SkaleData Airflow base image
 
 Maintained, drop-in replacement for `apache/airflow` that bakes in the
-[`skaledata-airflow-plugins`](./package) package. Used by every SkaleData-managed
+[`skale-airflow-plugins`](./package) package. Used by every SkaleData-managed
 Airflow deployment by default.
 
 ```
@@ -15,7 +15,7 @@ customer-facing tag — we don't offer Python as a user choice.
 
 - `apache-airflow` (from `apache/airflow:<version>-python<version>`)
 - `apache-airflow-providers-airbyte`
-- `skaledata-airflow-plugins` — see [package/README.md](./package/README.md)
+- `skale-airflow-plugins` — see [package/README.md](./package/README.md)
 
 ## Auto-pick-up of `packages.txt` and `requirements.txt`
 

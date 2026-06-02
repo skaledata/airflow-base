@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "skaledata-airflow-plugins"
-version = "0.1.0"
-description = "Airflow plugins published by SkaleData. First payload: a bearer-auth shim for the Airbyte provider against clusters running with global.auth.enabled=false."
+name = "skale-airflow-plugins"
+version = "0.2.0"
+description = "SkaleData's Airflow extensions: drop-in replacements for upstream Airflow providers that talk to SkaleData-managed services. Mirrors Airflow's own provider layout under the `skale.providers.*` namespace."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
@@ -32,7 +32,7 @@ Source = "https://github.com/skaledata/airflow-base"
 Issues = "https://github.com/skaledata/airflow-base/issues"
 
 [project.entry-points."airflow.plugins"]
-skaledata_airbyte = "skaledata_airflow_plugins.airbyte:SkaleDataAirbytePlugin"
+skale_airbyte = "skale.providers.airbyte.plugin:AirbytePlugin"
 
 [project.optional-dependencies]
 dev = [
@@ -41,7 +41,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["skaledata_airflow_plugins"]
+packages = ["skale"]
 
 [tool.ruff]
 line-length = 100
