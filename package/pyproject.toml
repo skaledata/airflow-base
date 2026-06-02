@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "skaledata-airflow-plugins"
+version = "0.1.0"
+description = "Airflow plugins published by SkaleData. First payload: a bearer-auth shim for the Airbyte provider against clusters running with global.auth.enabled=false."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "SkaleData", email = "support@skaledata.com" }]
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Framework :: Apache Airflow",
+]
+# Runtime deps. Airflow itself is supplied by the host environment (apache/airflow base image).
+# The airbyte provider and SDK are pulled in here so this package is self-contained when
+# pip-installed outside the SkaleData base image (e.g. from PyPI).
+dependencies = [
+  "apache-airflow-providers-airbyte",
+  "airbyte-api",
+]
+
+[project.urls]
+Homepage = "https://skaledata.com"
+Source = "https://github.com/skaledata/airflow-base"
+Issues = "https://github.com/skaledata/airflow-base/issues"
+
+[project.entry-points."airflow.plugins"]
+skaledata_airbyte = "skaledata_airflow_plugins.airbyte:SkaleDataAirbytePlugin"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["skaledata_airflow_plugins"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
