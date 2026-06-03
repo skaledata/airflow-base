@@ -66,18 +66,25 @@ ONBUILD RUN PKGS=$(grep -v '^\s*#' /tmp/skaledata-onbuild/packages.txt 2>/dev/nu
               apt-get clean && rm -rf /var/lib/apt/lists/*; \
             fi && rm -rf /tmp/skaledata-onbuild
 
-# requirements.txt — pip install (runs as airflow, under Airflow constraints)
+# requirements.txt — pip install (runs as airflow)
 #
 # Same comment/blank filter as packages.txt above. Pip's `-r` already
 # ignores `#` lines on its own, but we mirror the check here so we don't
 # fork a pip process when the file is comments-only.
+#
+# We deliberately do NOT pass --constraint. Apache's Airflow constraints
+# files pin specific provider versions; layering them on top of customer
+# requirements.txt blocks legitimate version bumps (e.g. picking a
+# newer provider release than the constraints file knows about) without
+# adding much safety — the base image's own Airflow install is already
+# pinned with constraints at build time, and customer-side breakage from
+# their own pip pins is exactly what a customer would expect.
+# Matches Astronomer's astro-runtime behaviour.
 ONBUILD USER airflow
 ONBUILD COPY --chown=airflow:0 requirements.tx[t] /tmp/skaledata-onbuild/
 ONBUILD RUN REQS=$(grep -v '^\s*#' /tmp/skaledata-onbuild/requirements.txt 2>/dev/null | grep -v '^\s*$' || true); \
             if [ -n "$REQS" ]; then \
-              pip install --no-cache-dir \
-                --constraint "${SKALEDATA_AIRFLOW_CONSTRAINTS_URL}" \
-                -r /tmp/skaledata-onbuild/requirements.txt; \
+              pip install --no-cache-dir -r /tmp/skaledata-onbuild/requirements.txt; \
             fi && rm -rf /tmp/skaledata-onbuild
 
 LABEL org.opencontainers.image.source="https://github.com/skaledata/airflow-base"

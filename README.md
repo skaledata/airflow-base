@@ -32,8 +32,12 @@ Before any of the customer's own instructions run, the triggers:
 1. Look for **`packages.txt`** alongside the customer's Dockerfile. If present,
    every line is installed via `apt-get install --no-install-recommends`.
 2. Look for **`requirements.txt`** alongside the customer's Dockerfile. If
-   present, it's installed via `pip install --constraint <airflow-constraints>`
-   so customer deps can't break the base image's carefully-pinned dep tree.
+   present, it's installed via `pip install -r requirements.txt`. We do **not**
+   pass `--constraint` here — Apache's constraints files pin specific provider
+   versions and block legitimate customer bumps (e.g. picking a newer Airbyte
+   provider release than the constraints know about). Matches Astronomer's
+   astro-runtime behaviour. The base image's own Airflow install is still
+   pinned with constraints at build time, so the platform layer stays stable.
 
 Both files are optional. The simplest customer Dockerfile is one line:
 

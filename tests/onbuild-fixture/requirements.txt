@@ -1,6 +1,14 @@
 # Python dependencies for your Airflow image.
 #
-# This fixture file deliberately includes a comment header and a blank
-# line to verify the ONBUILD layer treats them the same as packages.txt.
+# This fixture file deliberately includes:
+#   - a comment header (verifies the ONBUILD comment filter)
+#   - a blank line below
+#   - a plain pip dep (`requests`) for the smoke test
+#   - a provider pin newer than what the Airflow constraints file knows
+#     about — verifies the ONBUILD pip step does NOT pass --constraint
+#     (if it did, this build would fail with a version conflict, the same
+#     way Trux's `apache-airflow-providers-airbyte==5.5.0` did before
+#     v0.2.4)
 
 requests
+apache-airflow-providers-airbyte==5.5.0
