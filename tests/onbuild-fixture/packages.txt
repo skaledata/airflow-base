@@ -1,1 +1,8 @@
+# OS packages for your Airflow image (one per line, apt-get install names).
+#
+# This fixture file deliberately includes a comment header and a blank
+# line to verify the ONBUILD layer's filter strips them before xargs.
+#
+# Examples:
+
 jq

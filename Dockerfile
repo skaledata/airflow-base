@@ -52,18 +52,29 @@ COPY --chown=airflow:0 webserver_config.py /opt/airflow/webserver_config.py
 # packages.txt for apt. Customers migrating from Astro need zero changes.
 
 # packages.txt — apt install (runs as root)
+#
+# The grep filter strips `#` comments and blank lines so a scaffolded
+# packages.txt with commented-out examples doesn't make apt try to install
+# the comment text. `|| true` keeps the pipeline from failing under
+# `pipefail` when grep produces zero matches.
 ONBUILD USER root
 ONBUILD COPY --chown=airflow:0 packages.tx[t] /tmp/skaledata-onbuild/
-ONBUILD RUN if [ -s /tmp/skaledata-onbuild/packages.txt ]; then \
+ONBUILD RUN PKGS=$(grep -v '^\s*#' /tmp/skaledata-onbuild/packages.txt 2>/dev/null | grep -v '^\s*$' || true); \
+            if [ -n "$PKGS" ]; then \
               apt-get update && \
-              xargs -a /tmp/skaledata-onbuild/packages.txt apt-get install -y --no-install-recommends && \
+              echo "$PKGS" | xargs apt-get install -y --no-install-recommends && \
               apt-get clean && rm -rf /var/lib/apt/lists/*; \
             fi && rm -rf /tmp/skaledata-onbuild
 
 # requirements.txt — pip install (runs as airflow, under Airflow constraints)
+#
+# Same comment/blank filter as packages.txt above. Pip's `-r` already
+# ignores `#` lines on its own, but we mirror the check here so we don't
+# fork a pip process when the file is comments-only.
 ONBUILD USER airflow
 ONBUILD COPY --chown=airflow:0 requirements.tx[t] /tmp/skaledata-onbuild/
-ONBUILD RUN if [ -s /tmp/skaledata-onbuild/requirements.txt ]; then \
+ONBUILD RUN REQS=$(grep -v '^\s*#' /tmp/skaledata-onbuild/requirements.txt 2>/dev/null | grep -v '^\s*$' || true); \
+            if [ -n "$REQS" ]; then \
               pip install --no-cache-dir \
                 --constraint "${SKALEDATA_AIRFLOW_CONSTRAINTS_URL}" \
                 -r /tmp/skaledata-onbuild/requirements.txt; \

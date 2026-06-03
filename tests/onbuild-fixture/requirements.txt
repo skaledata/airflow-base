@@ -1,1 +1,6 @@
+# Python dependencies for your Airflow image.
+#
+# This fixture file deliberately includes a comment header and a blank
+# line to verify the ONBUILD layer treats them the same as packages.txt.
+
 requests
