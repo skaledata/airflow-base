@@ -1,16 +1,22 @@
 name: Release
 
-# Builds and pushes the SkaleData Airflow base image to GHCR on every v* tag.
+# Builds and publishes two artifacts on every v* tag:
 #
-# Tag conventions:
-#   v0.1.0                      — full matrix (every Airflow version in the matrix below)
-#   v0.1.1-airflow3.2.1         — single-target rebuild without rev-bumping plugin
+#   1. The base Docker image at GHCR (multi-arch, image-tagged by Airflow
+#      version — not by the Python version, which is an internal build
+#      pin and not a user choice).
+#         ghcr.io/skaledata/airflow:<airflow-version>          (mutable)
+#         ghcr.io/skaledata/airflow:<airflow-version>-<sha7>   (immutable)
 #
-# Image tags published per Airflow target on each release. The Python version
-# is an internal build-time pin (currently 3.12) and intentionally not part of
-# the customer-facing tag — we don't offer Python as a user choice.
-#   ghcr.io/skaledata/airflow:<airflow-version>          (mutable, latest plugin)
-#   ghcr.io/skaledata/airflow:<airflow-version>-<sha7>   (immutable per build)
+#   2. The Python package on PyPI, published as airflow-provider-skaledata.
+#      Uses PyPA Trusted Publishing (OIDC) — no API token to rotate.
+#      Configure the trusted publisher on PyPI (first-time setup):
+#        https://pypi.org/manage/account/publishing/ → "Add a pending publisher"
+#        - PyPI Project Name: airflow-provider-skaledata
+#        - Owner:             skaledata
+#        - Repository name:   airflow-base
+#        - Workflow name:     release.yml
+#        (Leave environment name blank — we don't use one.)
 
 on:
   push:
@@ -24,6 +30,7 @@ env:
 
 jobs:
   build-and-push:
+    name: Build & push Docker image
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -83,3 +90,29 @@ jobs:
             ${{ steps.tags.outputs.immutable }}
           cache-from: type=gha,scope=airflow-${{ matrix.airflow }}-py${{ matrix.python }}
           cache-to: type=gha,mode=max,scope=airflow-${{ matrix.airflow }}-py${{ matrix.python }}
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    permissions:
+      # Required for PyPA Trusted Publishing (OIDC token exchange).
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build
+        run: pip install --upgrade pip build
+
+      - name: Build sdist + wheel
+        working-directory: package
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: package/dist
