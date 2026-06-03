@@ -78,3 +78,6 @@ jobs:
 
       - name: Verify skale-airflow-plugins is still importable
         run: docker run --rm --entrypoint /bin/bash skaledata-airflow-base:downstream-test -c "python -c 'from skale.providers.airbyte.hooks.airbyte import AirbyteHook; print(\"plugin ok\")'"
+
+      - name: Verify default webserver_config.py is present
+        run: docker run --rm --entrypoint /bin/bash skaledata-airflow-base:downstream-test -c "grep -q 'AUTH_ROLE_PUBLIC.*Admin' /opt/airflow/webserver_config.py && echo 'webserver_config ok'"

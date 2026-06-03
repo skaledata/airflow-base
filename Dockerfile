@@ -23,6 +23,14 @@ COPY --chown=airflow:0 package/ /tmp/skale-airflow-plugins/
 RUN pip install --no-cache-dir /tmp/skale-airflow-plugins \
   && rm -rf /tmp/skale-airflow-plugins
 
+# Default FAB auth-manager config. SkaleData proxies validate the sdk_*
+# API key at the edge, so an inner login screen would just be noise.
+# Customers who want a stricter internal model override this by COPYing
+# their own webserver_config.py in their Dockerfile or by mounting one
+# at /opt/airflow/webserver_config.py — both wins over this baked-in
+# default.
+COPY --chown=airflow:0 webserver_config.py /opt/airflow/webserver_config.py
+
 # ----------------------------------------------------------------------------
 # ONBUILD triggers — auto-pick-up of packages.txt + requirements.txt
 # ----------------------------------------------------------------------------

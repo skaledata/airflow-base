@@ -16,6 +16,12 @@ customer-facing tag — we don't offer Python as a user choice.
 - `apache-airflow` (from `apache/airflow:<version>-python<version>`)
 - `apache-airflow-providers-airbyte`
 - `skale-airflow-plugins` — see [package/README.md](./package/README.md)
+- A default `webserver_config.py` at `/opt/airflow/webserver_config.py`
+  (`AUTH_ROLE_PUBLIC = "Admin"`) — SkaleData proxies validate the
+  `sdk_*` API key at the edge, so an internal login screen would just
+  be noise. Override by COPYing your own `webserver_config.py` in your
+  Dockerfile or by mounting one at `/opt/airflow/webserver_config.py` —
+  both wins over the baked-in default.
 
 ## Auto-pick-up of `packages.txt` and `requirements.txt`
 
