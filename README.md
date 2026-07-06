@@ -42,7 +42,7 @@ Before any of the customer's own instructions run, the triggers:
 Both files are optional. The simplest customer Dockerfile is one line:
 
 ```Dockerfile
-FROM ghcr.io/skaledata/airflow:3.2.2
+FROM ghcr.io/skaledata/airflow:3.3.0
 ```
 
 Convention matches [Astronomer's Astro Runtime](https://www.astronomer.io/docs/astro/cli/develop-project/#add-python-and-os-level-packages),
@@ -81,46 +81,88 @@ swap the base:
 The plugins are pre-installed and registered via Airflow entry points; no other
 changes needed.
 
+## Local development
+
+Building the image locally requires both build args — there are no defaults
+in the `Dockerfile` on purpose (so a naked `docker build` fails loudly
+instead of silently building whatever the last hardcoded default was):
+
+```bash
+docker build \
+  --build-arg AIRFLOW_VERSION=3.3.0 \
+  --build-arg PYTHON_VERSION=3.12 \
+  -t skaledata-airflow:local .
+```
+
+Pick the pair from [`versions.json`](./versions.json). The plugin's host-side
+tests (fast) run from the `package/` dir:
+
+```bash
+cd package && pip install -e ".[dev]" && pytest
+```
+
+The full "does it build + do the ONBUILD triggers fire + does the plugin
+import against this Airflow" check is what CI's `dockerfile-build` job does
+end-to-end. To reproduce locally, walk through the steps in
+[`.github/workflows/ci.yml`](./.github/workflows/ci.yml).
+
 ## Releasing
 
 There are two independent release channels, distinguished by tag prefix:
 
-### Image release (rebuild all `versions.json` entries → GHCR)
+| Tag prefix    | What it does                                            | Rebuilds images? | Publishes to PyPI? |
+| ------------- | ------------------------------------------------------- | ---------------- | ------------------ |
+| `image-v*`    | Rebuild every entry in `versions.json`, push to GHCR    | Yes              | No                 |
+| `plugin-v*`   | Publish `airflow-provider-skaledata` from `package/`    | No               | Yes                |
 
-```
-git tag image-v2026-07-06
-git push origin image-v2026-07-06
-```
+### Adding a new Airflow version
+
+1. Open a PR that adds one entry to [`versions.json`](./versions.json).
+   Flip `latest: true` from the previous entry to the new one if this is
+   the version that should back the floating `:latest` GHCR tag.
+   ```json
+   { "airflow": "3.3.1", "python": "3.12", "latest": true }
+   ```
+2. Wait for CI to go green — the new entry gets its own `dockerfile-build`
+   matrix row that runs the plugin's `pytest` suite inside the built image,
+   so version-drift breakage (e.g. an Airflow bump renaming a class the
+   plugin subclasses) is caught here, not on the release tag.
+3. Merge to `main`.
+4. Cut an image release from `main`:
+   ```bash
+   git checkout main && git pull
+   git tag image-v2026-07-06
+   git push origin image-v2026-07-06
+   ```
+5. The [Release workflow](./.github/workflows/release.yml) builds every
+   entry in `versions.json` and pushes `<airflow-version>`,
+   `<airflow-version>-<sha7>`, and (for the `latest`-flagged entry)
+   `:latest` to GHCR.
 
 The tag body is a free-form marker (a date works well) — it doesn't affect
-the GHCR image tags, which come from `versions.json`. This channel rebuilds
-every entry in `versions.json` and pushes the mutable, immutable, and
-(where flagged) `:latest` tags.
+the GHCR image tags, which come from `versions.json`.
 
-To ship a **new Airflow version**, add an entry to `versions.json` and
-cut an `image-v*` tag:
+### Plugin-only release (`airflow-provider-skaledata` on PyPI)
 
-```json
-{ "airflow": "3.3.1", "python": "3.12", "latest": true }
-```
+1. Bump `version` in [`package/pyproject.toml`](./package/pyproject.toml),
+   PR, merge.
+2. Cut a tag that matches the new version exactly:
+   ```bash
+   git checkout main && git pull
+   git tag plugin-v0.4.0
+   git push origin plugin-v0.4.0
+   ```
+3. The workflow verifies the tag matches `pyproject.toml`'s `version`
+   before publishing — mismatched tags fail the release loudly. This
+   channel does **not** rebuild images.
 
-To ship a **plugin-only** update in the images (no Airflow bump), just cut
-an `image-v*` tag — the plugin lives at `package/` and gets baked in from
-current `main`.
+### Plugin-only refresh of images (no new PyPI release, no Airflow bump)
 
-### Plugin release (publish to PyPI)
-
-```
-# 1. Bump package/pyproject.toml version, commit, merge to main.
-# 2. Tag matches the pyproject version exactly:
-git tag plugin-v0.4.0
-git push origin plugin-v0.4.0
-```
-
-The workflow verifies the tag matches `package/pyproject.toml`'s `version`
-before publishing — mismatched tags fail the release loudly.
+Just cut an `image-v*` tag — every entry in `versions.json` gets rebuilt
+against the current `main`, which bakes in whatever's at `package/` right
+now.
 
 ### Coordinated release (new plugin + refreshed images)
 
 Two tags, in order: `plugin-v0.4.0` first (so PyPI has the new version),
-then `image-v...` (so the images bake in that plugin).
+then `image-v...` (so the images bake it in from `main`).
