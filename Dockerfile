@@ -1,5 +1,9 @@
-ARG AIRFLOW_VERSION=3.2.2
-ARG PYTHON_VERSION=3.12
+# AIRFLOW_VERSION and PYTHON_VERSION are required build args. They are set by
+# the CI + release workflows from the matrix generated out of versions.json —
+# no defaults here on purpose, so a local `docker build` without them fails
+# loudly instead of silently building whatever the last hardcoded default was.
+ARG AIRFLOW_VERSION
+ARG PYTHON_VERSION
 
 FROM apache/airflow:${AIRFLOW_VERSION}-python${PYTHON_VERSION}
 

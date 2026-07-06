@@ -6,6 +6,26 @@ on:
     branches: [main]
 
 jobs:
+  # Emit a Docker build matrix from versions.json so we don't duplicate
+  # (airflow, python) pairs across CI and release. Also enforces the schema
+  # rule that at most one entry may set latest: true.
+  setup-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set
+        run: |
+          set -euo pipefail
+          LATEST_COUNT=$(jq '[.versions[] | select(.latest == true)] | length' versions.json)
+          if [ "$LATEST_COUNT" -gt 1 ]; then
+            echo "::error file=versions.json::At most one version entry may have latest: true (found $LATEST_COUNT)"
+            exit 1
+          fi
+          MATRIX=$(jq -c '{include: .versions}' versions.json)
+          echo "matrix=${MATRIX}" >>"$GITHUB_OUTPUT"
+
   lint-and-test:
     runs-on: ubuntu-latest
     steps:
@@ -32,7 +52,11 @@ jobs:
         run: pytest -v
 
   dockerfile-build:
+    needs: setup-matrix
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -52,10 +76,10 @@ jobs:
           tags: skaledata-airflow-base:test
           platforms: linux/amd64
           build-args: |
-            AIRFLOW_VERSION=3.2.2
-            PYTHON_VERSION=3.12
-          cache-from: type=gha,scope=airflow-3.2.2-py3.12
-          cache-to: type=gha,mode=max,scope=airflow-3.2.2-py3.12
+            AIRFLOW_VERSION=${{ matrix.airflow }}
+            PYTHON_VERSION=${{ matrix.python }}
+          cache-from: type=gha,scope=airflow-${{ matrix.airflow }}-py${{ matrix.python }}
+          cache-to: type=gha,mode=max,scope=airflow-${{ matrix.airflow }}-py${{ matrix.python }}
 
       # Verify ONBUILD triggers actually pick up packages.txt + requirements.txt.
       # The fixture has packages.txt=jq and requirements.txt=requests; if either
@@ -76,8 +100,18 @@ jobs:
       - name: Verify requirements.txt was installed via pip (requests)
         run: docker run --rm --entrypoint /bin/bash skaledata-airflow-base:downstream-test -c "python -c 'import requests; print(\"requests\", requests.__version__)'"
 
-      - name: Verify skale-airflow-plugins is still importable
-        run: docker run --rm --entrypoint /bin/bash skaledata-airflow-base:downstream-test -c "python -c 'from skale.providers.airbyte.hooks.airbyte import AirbyteHook; print(\"plugin ok\")'"
-
       - name: Verify default webserver_config.py is present
         run: docker run --rm --entrypoint /bin/bash skaledata-airflow-base:downstream-test -c "grep -q 'AUTH_ROLE_PUBLIC.*Admin' /opt/airflow/webserver_config.py && echo 'webserver_config ok'"
+
+      # Run the plugin's pytest suite INSIDE the built image so version-specific
+      # import breakage (e.g. an Airflow bump renaming a base class the plugin
+      # subclasses) is caught pre-release, not the first time the release tag
+      # runs. Volume-mounts the tests dir; installs pytest into the airflow
+      # user's --user site so we don't have to bake test deps into the base.
+      - name: Run plugin tests inside image (airflow ${{ matrix.airflow }})
+        run: |
+          docker run --rm \
+            --entrypoint /bin/bash \
+            -v "$PWD/package:/pkg:ro" \
+            skaledata-airflow-base:test \
+            -c "pip install --user --no-cache-dir 'pytest>=8.0' && cd /pkg && python -m pytest tests -v -p no:cacheprovider"

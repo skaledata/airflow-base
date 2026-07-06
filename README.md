@@ -52,13 +52,21 @@ so customers migrating from Astro need zero config changes.
 
 Image tags are pinned to upstream Airflow versions one-to-one:
 
-| Tag              | Airflow | Notes                                          |
-| ---------------- | ------- | ---------------------------------------------- |
-| `3.2.2`          | 3.2.2   | Mutable — always the latest plugin for 3.2.2   |
-| `3.2.2-<sha7>`   | 3.2.2   | Immutable — pin against this for prod          |
+| Tag              | Airflow | Notes                                                    |
+| ---------------- | ------- | -------------------------------------------------------- |
+| `3.3.0`          | 3.3.0   | Mutable — always the latest plugin for 3.3.0             |
+| `3.3.0-<sha7>`   | 3.3.0   | Immutable — pin against this for prod                    |
+| `3.2.2`          | 3.2.2   | Mutable — always the latest plugin for 3.2.2             |
+| `3.2.2-<sha7>`   | 3.2.2   | Immutable — pin against this for prod                    |
+| `latest`         | 3.3.0   | Floating — points at the entry flagged `latest` in [`versions.json`](./versions.json) |
 
-A plugin-only fix (no Airflow bump) re-publishes the mutable `3.2.2` tag and a
-fresh immutable `-<sha7>`. The Airflow version doesn't move.
+Supported Airflow versions live in [`versions.json`](./versions.json) — that
+file is the single source of truth for the CI matrix and the release
+matrix. Adding a new Airflow version is one line there.
+
+A plugin-only fix (no Airflow bump) re-publishes the mutable per-version tag
+and a fresh immutable `-<sha7>` for every entry in `versions.json`. The
+Airflow version doesn't move.
 
 ## Using a custom image as a SkaleData customer
 
@@ -66,8 +74,8 @@ If you maintain your own image (e.g. to install custom providers or DAG deps),
 swap the base:
 
 ```Dockerfile
-- FROM apache/airflow:3.2.2-python3.12
-+ FROM ghcr.io/skaledata/airflow:3.2.2
+- FROM apache/airflow:3.3.0-python3.12
++ FROM ghcr.io/skaledata/airflow:3.3.0
 ```
 
 The plugins are pre-installed and registered via Airflow entry points; no other
@@ -75,7 +83,44 @@ changes needed.
 
 ## Releasing
 
-1. Bump `package/pyproject.toml` `version` if the plugin changed.
-2. Update the matrix in `.github/workflows/release.yml` if adding a new Airflow target.
-3. Tag a release: `git tag v0.1.0 && git push origin v0.1.0`.
-4. The release workflow builds + pushes every matrix entry to GHCR.
+There are two independent release channels, distinguished by tag prefix:
+
+### Image release (rebuild all `versions.json` entries → GHCR)
+
+```
+git tag image-v2026-07-06
+git push origin image-v2026-07-06
+```
+
+The tag body is a free-form marker (a date works well) — it doesn't affect
+the GHCR image tags, which come from `versions.json`. This channel rebuilds
+every entry in `versions.json` and pushes the mutable, immutable, and
+(where flagged) `:latest` tags.
+
+To ship a **new Airflow version**, add an entry to `versions.json` and
+cut an `image-v*` tag:
+
+```json
+{ "airflow": "3.3.1", "python": "3.12", "latest": true }
+```
+
+To ship a **plugin-only** update in the images (no Airflow bump), just cut
+an `image-v*` tag — the plugin lives at `package/` and gets baked in from
+current `main`.
+
+### Plugin release (publish to PyPI)
+
+```
+# 1. Bump package/pyproject.toml version, commit, merge to main.
+# 2. Tag matches the pyproject version exactly:
+git tag plugin-v0.4.0
+git push origin plugin-v0.4.0
+```
+
+The workflow verifies the tag matches `package/pyproject.toml`'s `version`
+before publishing — mismatched tags fail the release loudly.
+
+### Coordinated release (new plugin + refreshed images)
+
+Two tags, in order: `plugin-v0.4.0` first (so PyPI has the new version),
+then `image-v...` (so the images bake in that plugin).

@@ -1,45 +1,74 @@
 name: Release
 
-# Builds and publishes two artifacts on every v* tag:
+# Two independent release channels, distinguished by tag prefix:
 #
-#   1. The base Docker image at GHCR (multi-arch, image-tagged by Airflow
-#      version — not by the Python version, which is an internal build
-#      pin and not a user choice).
-#         ghcr.io/skaledata/airflow:<airflow-version>          (mutable)
-#         ghcr.io/skaledata/airflow:<airflow-version>-<sha7>   (immutable)
+#   image-v*   → build + push every Docker image in versions.json to GHCR
+#   plugin-v*  → publish airflow-provider-skaledata to PyPI (from package/)
 #
-#   2. The Python package on PyPI, published as airflow-provider-skaledata.
-#      Uses PyPA Trusted Publishing (OIDC) — no API token to rotate.
-#      Configure the trusted publisher on PyPI (first-time setup):
-#        https://pypi.org/manage/account/publishing/ → "Add a pending publisher"
-#        - PyPI Project Name: airflow-provider-skaledata
-#        - Owner:             skaledata
-#        - Repository name:   airflow-base
-#        - Workflow name:     release.yml
-#        (Leave environment name blank — we don't use one.)
+# A "coordinated" release (new image AND new plugin at the same time) is
+# two tags: `plugin-v0.4.0` followed by `image-v2026-07-06`. Splitting them
+# means a plugin-only patch doesn't rebuild every image, and adding a new
+# Airflow version doesn't republish the plugin.
+#
+# Image artifacts (per matrix entry in versions.json):
+#   ghcr.io/skaledata/airflow:<airflow-version>          (mutable)
+#   ghcr.io/skaledata/airflow:<airflow-version>-<sha7>   (immutable)
+#   ghcr.io/skaledata/airflow:latest                     (only when latest: true)
+#
+# Plugin publish uses PyPA Trusted Publishing (OIDC) — no API token to
+# rotate. Configure the trusted publisher on PyPI (first-time setup):
+#   https://pypi.org/manage/account/publishing/ → "Add a pending publisher"
+#   - PyPI Project Name: airflow-provider-skaledata
+#   - Owner:             skaledata
+#   - Repository name:   airflow-base
+#   - Workflow name:     release.yml
+#   (Leave environment name blank — we don't use one.)
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'image-v*'
+      - 'plugin-v*'
   workflow_dispatch:
+    inputs:
+      target:
+        description: 'What to release'
+        type: choice
+        options: [image, plugin]
+        default: image
 
 env:
   REGISTRY: ghcr.io
   IMAGE: ghcr.io/skaledata/airflow
 
 jobs:
+  # Same matrix generator as CI — reads versions.json so adding an Airflow
+  # version is a one-line edit there, not a workflow change here too.
+  setup-matrix:
+    if: startsWith(github.ref, 'refs/tags/image-v') || (github.event_name == 'workflow_dispatch' && inputs.target == 'image')
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: set
+        run: |
+          set -euo pipefail
+          LATEST_COUNT=$(jq '[.versions[] | select(.latest == true)] | length' versions.json)
+          if [ "$LATEST_COUNT" -gt 1 ]; then
+            echo "::error file=versions.json::At most one version entry may have latest: true (found $LATEST_COUNT)"
+            exit 1
+          fi
+          MATRIX=$(jq -c '{include: .versions}' versions.json)
+          echo "matrix=${MATRIX}" >>"$GITHUB_OUTPUT"
+
   build-and-push:
     name: Build & push Docker image
+    needs: setup-matrix
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        # Add new Airflow versions here. Python version baked in matches what
-        # the SkaleData control plane's compat_loader.py points at.
-        include:
-          - airflow: "3.2.2"
-            python: "3.12"
+      matrix: ${{ fromJson(needs.setup-matrix.outputs.matrix) }}
 
     permissions:
       contents: read
@@ -61,12 +90,18 @@ jobs:
       - name: Compute image tags
         id: tags
         run: |
+          set -euo pipefail
           SHA_SHORT="${GITHUB_SHA::7}"
           MUTABLE="${{ env.IMAGE }}:${{ matrix.airflow }}"
           IMMUTABLE="${{ env.IMAGE }}:${{ matrix.airflow }}-${SHA_SHORT}"
+          TAGS="${MUTABLE}"$'\n'"${IMMUTABLE}"
+          if [ "${{ matrix.latest }}" = "true" ]; then
+            TAGS="${TAGS}"$'\n'"${{ env.IMAGE }}:latest"
+          fi
           {
-            echo "mutable=${MUTABLE}"
-            echo "immutable=${IMMUTABLE}"
+            echo "tags<<EOF"
+            echo "${TAGS}"
+            echo "EOF"
           } >>"${GITHUB_OUTPUT}"
 
       - name: Set up QEMU (for arm64 cross-build)
@@ -85,15 +120,13 @@ jobs:
           build-args: |
             AIRFLOW_VERSION=${{ matrix.airflow }}
             PYTHON_VERSION=${{ matrix.python }}
-          tags: |
-            ${{ steps.tags.outputs.mutable }}
-            ${{ steps.tags.outputs.immutable }}
+          tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha,scope=airflow-${{ matrix.airflow }}-py${{ matrix.python }}
           cache-to: type=gha,mode=max,scope=airflow-${{ matrix.airflow }}-py${{ matrix.python }}
 
   publish-pypi:
     name: Publish to PyPI
-    needs: build-and-push
+    if: startsWith(github.ref, 'refs/tags/plugin-v') || (github.event_name == 'workflow_dispatch' && inputs.target == 'plugin')
     runs-on: ubuntu-latest
     permissions:
       # Required for PyPA Trusted Publishing (OIDC token exchange).
@@ -104,6 +137,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      # Guardrail: the plugin-v<X.Y.Z> git tag must match package/pyproject.toml
+      # `version = "<X.Y.Z>"`. Prevents accidentally publishing 0.3.0 twice
+      # (or a plugin-v0.4.0 tag against a pyproject still on 0.3.0).
+      - name: Verify tag matches pyproject.toml version
+        if: startsWith(github.ref, 'refs/tags/plugin-v')
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#plugin-v}"
+          PYPROJECT_VERSION=$(grep -E '^version = ' package/pyproject.toml | head -n1 | sed -E 's/^version = "(.*)"/\1/')
+          if [ "$TAG_VERSION" != "$PYPROJECT_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME (=$TAG_VERSION) does not match package/pyproject.toml version ($PYPROJECT_VERSION)"
+            exit 1
+          fi
 
       - name: Install build
         run: pip install --upgrade pip build
