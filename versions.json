@@ -1,0 +1,14 @@
+{
+  "$comment": "Single source of truth for Airflow versions this repo builds and tests. CI matrixes over every entry on every PR; release.yml builds every entry on image-v* tags. Add a new Airflow version by appending an object here and setting latest: true (removing it from the previous entry).",
+  "versions": [
+    {
+      "airflow": "3.2.2",
+      "python": "3.12"
+    },
+    {
+      "airflow": "3.3.0",
+      "python": "3.12",
+      "latest": true
+    }
+  ]
+}
