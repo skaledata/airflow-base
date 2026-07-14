@@ -64,6 +64,17 @@ def test_trigger_overrides_serialize_and_run() -> None:
     assert AirbyteSyncTrigger.run is not UpstreamAirbyteSyncTrigger.run
 
 
+def test_no_runtime_context_import() -> None:
+    # airflow.utils.context is deprecated at runtime (Airflow 3.2 warns, later
+    # removes). Context must only be imported under TYPE_CHECKING, so the name
+    # must not exist in the modules at runtime.
+    import skale.providers.airbyte.operators.airbyte as operators_module
+    import skale.providers.airbyte.sensors.airbyte as sensors_module
+
+    assert not hasattr(operators_module, "Context")
+    assert not hasattr(sensors_module, "Context")
+
+
 def test_plugin_registers_hook() -> None:
     assert issubclass(AirbytePlugin, AirflowPlugin)
     assert AirbytePlugin.name == "skale_airbyte"
