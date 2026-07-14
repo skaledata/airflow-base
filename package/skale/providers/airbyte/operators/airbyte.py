@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from airbyte_api.models import JobStatusEnum
 from airflow.exceptions import AirflowException
 from airflow.providers.airbyte.operators.airbyte import (
     AirbyteTriggerSyncOperator as _UpstreamAirbyteTriggerSyncOperator,
 )
-from airflow.utils.context import Context
+
+if TYPE_CHECKING:
+    from airflow.utils.context import Context
 
 from skale.providers.airbyte.hooks.airbyte import AirbyteHook
 from skale.providers.airbyte.triggers.airbyte import AirbyteSyncTrigger
