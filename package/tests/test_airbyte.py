@@ -13,6 +13,9 @@ from airflow.providers.airbyte.hooks.airbyte import AirbyteHook as UpstreamAirby
 from airflow.providers.airbyte.operators.airbyte import (
     AirbyteTriggerSyncOperator as UpstreamAirbyteTriggerSyncOperator,
 )
+from airflow.providers.airbyte.sensors.airbyte import (
+    AirbyteJobSensor as UpstreamAirbyteJobSensor,
+)
 from airflow.providers.airbyte.triggers.airbyte import (
     AirbyteSyncTrigger as UpstreamAirbyteSyncTrigger,
 )
@@ -20,6 +23,7 @@ from airflow.providers.airbyte.triggers.airbyte import (
 from skale.providers.airbyte.hooks.airbyte import AirbyteHook
 from skale.providers.airbyte.operators.airbyte import AirbyteTriggerSyncOperator
 from skale.providers.airbyte.plugin import AirbytePlugin
+from skale.providers.airbyte.sensors.airbyte import AirbyteJobSensor
 from skale.providers.airbyte.triggers.airbyte import AirbyteSyncTrigger
 
 
@@ -39,6 +43,18 @@ def test_hook_overrides_create_api_session() -> None:
     # The whole reason this hook exists — we own create_api_session
     # so the bearer token gets used instead of OAuth2 client credentials.
     assert AirbyteHook.create_api_session is not UpstreamAirbyteHook.create_api_session
+
+
+def test_sensor_subclasses_upstream() -> None:
+    assert issubclass(AirbyteJobSensor, UpstreamAirbyteJobSensor)
+
+
+def test_sensor_overrides_poke_and_execute() -> None:
+    # Upstream hardcodes its own hook in poke/execute (and its own trigger in
+    # the deferrable execute path), so both must be overridden for the
+    # bearer-auth hook to be used.
+    assert AirbyteJobSensor.poke is not UpstreamAirbyteJobSensor.poke
+    assert AirbyteJobSensor.execute is not UpstreamAirbyteJobSensor.execute
 
 
 def test_trigger_overrides_serialize_and_run() -> None:
@@ -61,3 +77,4 @@ def test_class_names_match_upstream() -> None:
     assert AirbyteHook.__name__ == "AirbyteHook"
     assert AirbyteTriggerSyncOperator.__name__ == "AirbyteTriggerSyncOperator"
     assert AirbyteSyncTrigger.__name__ == "AirbyteSyncTrigger"
+    assert AirbyteJobSensor.__name__ == "AirbyteJobSensor"

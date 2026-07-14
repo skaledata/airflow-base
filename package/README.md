@@ -23,6 +23,7 @@ Mirrors Airflow's own provider layout
 ```python
 from skale.providers.airbyte.hooks.airbyte    import AirbyteHook
 from skale.providers.airbyte.operators.airbyte import AirbyteTriggerSyncOperator
+from skale.providers.airbyte.sensors.airbyte  import AirbyteJobSensor
 from skale.providers.airbyte.triggers.airbyte  import AirbyteSyncTrigger
 ```
 
@@ -32,8 +33,8 @@ Subsequent SkaleData providers (`skale.providers.<other>...`) slot in here.
 
 ### `skale.providers.airbyte` — bearer-auth shim for managed Airbyte
 
-Drop-in replacements for the upstream Airbyte provider's hook, operator, and
-trigger that authenticate via a static bearer token (your SkaleData `sdk_*` API
+Drop-in replacements for the upstream Airbyte provider's hook, operator,
+sensor, and trigger that authenticate via a static bearer token (your SkaleData `sdk_*` API
 key) instead of the upstream OAuth2 `/applications/token` flow.
 
 SkaleData ships its managed Airbyte with `global.auth.enabled: false`. The Caddy
@@ -73,3 +74,41 @@ run_airbyte_sync()
 
 `AirbyteTriggerSyncOperator` is a drop-in for the upstream
 `AirbyteTriggerSyncOperator` — same arguments, same async/deferrable semantics.
+
+### Asynchronous (idempotent) usage
+
+With `asynchronous=True` the operator returns the Airbyte job id immediately
+and `AirbyteJobSensor` waits on it as a separate task. Because the submit and
+the wait are split, a sensor retry re-checks the *existing* job instead of
+kicking off a duplicate sync — mirroring the
+[upstream async example](https://docs.airbyte.com/platform/operator-guides/using-the-airflow-airbyte-operator#asynchronous-example):
+
+```python
+from datetime import datetime
+from airflow.decorators import dag
+from skale.providers.airbyte.operators.airbyte import AirbyteTriggerSyncOperator
+from skale.providers.airbyte.sensors.airbyte import AirbyteJobSensor
+
+
+@dag(start_date=datetime(2026, 1, 1), schedule=None, catchup=False)
+def run_airbyte_sync_async():
+    trigger_sync = AirbyteTriggerSyncOperator(
+        task_id="trigger_airbyte_sync",
+        airbyte_conn_id="airbyte_default",
+        connection_id="<your-airbyte-connection-uuid>",
+        asynchronous=True,
+    )
+    wait_for_sync = AirbyteJobSensor(
+        task_id="wait_for_airbyte_sync",
+        airbyte_conn_id="airbyte_default",
+        airbyte_job_id=trigger_sync.output,
+        deferrable=True,
+    )
+    trigger_sync >> wait_for_sync
+
+
+run_airbyte_sync_async()
+```
+
+`AirbyteJobSensor` supports both poke mode (default) and `deferrable=True`,
+same as upstream.
