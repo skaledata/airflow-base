@@ -21,10 +21,10 @@ Mirrors Airflow's own provider layout
 `skale.providers.*`:
 
 ```python
-from skale.providers.airbyte.hooks.airbyte    import AirbyteHook
+from skale.providers.airbyte.hooks.airbyte import AirbyteHook
 from skale.providers.airbyte.operators.airbyte import AirbyteTriggerSyncOperator
-from skale.providers.airbyte.sensors.airbyte  import AirbyteJobSensor
-from skale.providers.airbyte.triggers.airbyte  import AirbyteSyncTrigger
+from skale.providers.airbyte.sensors.airbyte import AirbyteJobSensor
+from skale.providers.airbyte.triggers.airbyte import AirbyteSyncTrigger
 ```
 
 Subsequent SkaleData providers (`skale.providers.<other>...`) slot in here.

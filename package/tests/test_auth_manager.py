@@ -88,11 +88,8 @@ def test_identity_login_sets_cookie_and_redirects() -> None:
 def test_admin_user_passes_authorization() -> None:
     manager = _manager()
     client = TestClient(manager.get_fastapi_app())
-    user = asyncio.run(
-        manager.get_user_from_token(
-            client.get("/token", headers={IDENTITY_HEADER: "jane@customer.com"}).json()["access_token"]
-        )
-    )
+    resp = client.get("/token", headers={IDENTITY_HEADER: "jane@customer.com"})
+    user = asyncio.run(manager.get_user_from_token(resp.json()["access_token"]))
     assert manager.is_authorized_dag(method="PUT", user=user)
     assert manager.is_authorized_configuration(method="GET", user=user)
     assert manager.is_authorized_variable(method="DELETE", user=user)

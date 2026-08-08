@@ -33,15 +33,14 @@ affects local pipeline testing.
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Request, status
-from fastapi.responses import RedirectResponse
-
 from airflow.api_fastapi.auth.managers.base_auth_manager import COOKIE_NAME_JWT_TOKEN
 from airflow.api_fastapi.auth.managers.simple.datamodels.login import LoginResponse
 from airflow.api_fastapi.auth.managers.simple.simple_auth_manager import SimpleAuthManager
 from airflow.api_fastapi.auth.managers.simple.user import SimpleAuthManagerUser
 from airflow.api_fastapi.common.router import AirflowRouter
 from airflow.configuration import conf
+from fastapi import FastAPI, Request, status
+from fastapi.responses import RedirectResponse
 
 # Injected by the SkaleData proxy for browser traffic (anti-spoof stripped at
 # the proxy; see skaledata/apps/proxy/cmd/proxy/main.go). Absent on direct
@@ -103,12 +102,14 @@ class SkaleDataAuthManager(SimpleAuthManager):
         @router.get("/token", status_code=status.HTTP_201_CREATED)
         def create_token_get(request: Request) -> LoginResponse:
             """Anonymous machine token — byte-compatible with the proxy's exchange."""
-            return LoginResponse(access_token=manager.generate_jwt(manager._user_from_request(request)))
+            user = manager._user_from_request(request)
+            return LoginResponse(access_token=manager.generate_jwt(user))
 
         @router.post("/token", status_code=status.HTTP_201_CREATED)
         def create_token_post(request: Request) -> LoginResponse:
             """POST variant; any body is ignored (identity comes from the header)."""
-            return LoginResponse(access_token=manager.generate_jwt(manager._user_from_request(request)))
+            user = manager._user_from_request(request)
+            return LoginResponse(access_token=manager.generate_jwt(user))
 
         @router.post("/token/cli", status_code=status.HTTP_201_CREATED)
         def create_token_cli(request: Request) -> LoginResponse:
