@@ -36,7 +36,6 @@ from __future__ import annotations
 from fastapi import FastAPI, Request, status
 from fastapi.responses import RedirectResponse
 
-from airflow.api_fastapi.app import get_cookie_path
 from airflow.api_fastapi.auth.managers.base_auth_manager import COOKIE_NAME_JWT_TOKEN
 from airflow.api_fastapi.auth.managers.simple.datamodels.login import LoginResponse
 from airflow.api_fastapi.auth.managers.simple.simple_auth_manager import SimpleAuthManager
@@ -77,6 +76,10 @@ class SkaleDataAuthManager(SimpleAuthManager):
         return AUTH_PREFIX + "/identity/login"
 
     def get_fastapi_app(self) -> FastAPI | None:
+        # Deferred: airflow.api_fastapi.app pulls in the full app config —
+        # only the api-server (the sole caller of this method) pays for it.
+        from airflow.api_fastapi.app import get_cookie_path
+
         router = AirflowRouter(tags=["SkaleDataAuthManagerLogin"])
         manager = self
 
