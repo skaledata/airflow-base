@@ -13,14 +13,34 @@ import os
 os.environ.setdefault("AIRFLOW__API_AUTH__JWT_SECRET", "test-secret-not-for-prod")
 os.environ.setdefault("AIRFLOW__CORE__UNIT_TEST_MODE", "True")
 
+import json  # noqa: E402
+
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+import skale.auth.manager as manager_mod  # noqa: E402
 from skale.auth.manager import (  # noqa: E402
     IDENTITY_HEADER,
     MACHINE_USERNAME,
+    ROLES_FILE_ENV,
     SkaleDataAuthManager,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_roster_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Isolate roster state: no env leak between tests, cache cleared."""
+    monkeypatch.delenv(ROLES_FILE_ENV, raising=False)
+    manager_mod._roster_cache = None
+    yield
+    manager_mod._roster_cache = None
+
+
+def _write_roster(tmp_path, monkeypatch, payload) -> str:
+    path = tmp_path / "roles.json"
+    path.write_text(payload if isinstance(payload, str) else json.dumps(payload))
+    monkeypatch.setenv(ROLES_FILE_ENV, str(path))
+    return str(path)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -95,9 +115,92 @@ def test_admin_user_passes_authorization() -> None:
     assert manager.is_authorized_variable(method="DELETE", user=user)
 
 
+def test_roster_maps_user_to_viewer_case_insensitive(tmp_path, monkeypatch) -> None:
+    _write_roster(tmp_path, monkeypatch, {"users": {"Jane@Customer.com": "viewer"}})
+    manager = _manager()
+    client = TestClient(manager.get_fastapi_app())
+    resp = client.get("/token", headers={IDENTITY_HEADER: "JANE@customer.COM"})
+    user = asyncio.run(manager.get_user_from_token(resp.json()["access_token"]))
+    assert user.get_name() == "JANE@customer.COM"
+    assert user.role == "VIEWER"
+
+
+def test_unlisted_user_gets_default_role(tmp_path, monkeypatch) -> None:
+    _write_roster(
+        tmp_path,
+        monkeypatch,
+        {"default_role": "VIEWER", "users": {"jane@customer.com": "OP"}},
+    )
+    assert manager_mod._resolve_role("someone@customer.com") == "VIEWER"
+    assert manager_mod._resolve_role("jane@customer.com") == "OP"
+
+
+def test_missing_roster_fails_open_to_admin(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv(ROLES_FILE_ENV, str(tmp_path / "does-not-exist.json"))
+    assert manager_mod._resolve_role("jane@customer.com") == "ADMIN"
+
+
+def test_invalid_roster_json_fails_open_to_admin(tmp_path, monkeypatch) -> None:
+    _write_roster(tmp_path, monkeypatch, "{not json")
+    assert manager_mod._resolve_role("jane@customer.com") == "ADMIN"
+
+
+def test_invalid_role_entries_dropped(tmp_path, monkeypatch) -> None:
+    _write_roster(
+        tmp_path,
+        monkeypatch,
+        {"default_role": "SUPERUSER", "users": {"jane@customer.com": "ROOT"}},
+    )
+    # Bad default_role falls back to ADMIN; bad user role entry is dropped.
+    assert manager_mod._resolve_role("jane@customer.com") == "ADMIN"
+
+
+def test_machine_identity_pinned_admin_despite_roster(tmp_path, monkeypatch) -> None:
+    _write_roster(
+        tmp_path,
+        monkeypatch,
+        {"default_role": "VIEWER", "users": {MACHINE_USERNAME: "VIEWER"}},
+    )
+    assert manager_mod._resolve_role(MACHINE_USERNAME) == "ADMIN"
+    # Proxy machine-token exchange (no header) must stay ADMIN too.
+    manager = _manager()
+    client = TestClient(manager.get_fastapi_app())
+    user = asyncio.run(manager.get_user_from_token(client.get("/token").json()["access_token"]))
+    assert user.role == "ADMIN"
+
+
+def test_roster_reloads_on_mtime_change(tmp_path, monkeypatch) -> None:
+    path = _write_roster(tmp_path, monkeypatch, {"users": {"jane@customer.com": "OP"}})
+    assert manager_mod._resolve_role("jane@customer.com") == "OP"
+    with open(path, "w") as f:
+        json.dump({"users": {"jane@customer.com": "VIEWER"}}, f)
+    os.utime(path, (0, os.stat(path).st_mtime + 10))
+    assert manager_mod._resolve_role("jane@customer.com") == "VIEWER"
+
+
+def test_roster_appearing_after_missing_is_picked_up(tmp_path, monkeypatch) -> None:
+    path = tmp_path / "roles.json"
+    monkeypatch.setenv(ROLES_FILE_ENV, str(path))
+    assert manager_mod._resolve_role("jane@customer.com") == "ADMIN"
+    path.write_text(json.dumps({"users": {"jane@customer.com": "VIEWER"}}))
+    assert manager_mod._resolve_role("jane@customer.com") == "VIEWER"
+
+
+def test_viewer_fails_write_authorization(tmp_path, monkeypatch) -> None:
+    _write_roster(tmp_path, monkeypatch, {"users": {"ro@customer.com": "VIEWER"}})
+    manager = _manager()
+    client = TestClient(manager.get_fastapi_app())
+    resp = client.get("/token", headers={IDENTITY_HEADER: "ro@customer.com"})
+    user = asyncio.run(manager.get_user_from_token(resp.json()["access_token"]))
+    assert user.role == "VIEWER"
+    assert not manager.is_authorized_dag(method="PUT", user=user)
+    assert not manager.is_authorized_variable(method="DELETE", user=user)
+    assert manager.is_authorized_dag(method="GET", user=user)
+
+
 def test_spoofed_header_cannot_escalate_role() -> None:
-    # The header only names the actor; role is pinned ADMIN server-side and
-    # tokens are signed — a forged token body fails signature validation.
+    # The header only names the actor; the role comes from the server-side
+    # roster and tokens are signed — a forged token body fails validation.
     manager = _manager()
     client = TestClient(manager.get_fastapi_app())
     token = client.get("/token", headers={IDENTITY_HEADER: "x@y.z"}).json()["access_token"]
