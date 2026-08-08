@@ -1,0 +1,37 @@
+# Dependabot dependency scanning (SOC 2 — CC6/CC7). Mirrors the skaledata
+# monorepo policy (SKD-101): weekly, non-security updates grouped to keep PR
+# noise down; security-fix PRs still open immediately + out of band.
+#
+# NOTE: the Dockerfile's `FROM apache/airflow:${AIRFLOW_VERSION}...` uses build
+# ARGs, so the base image is NOT Dependabot-trackable — that version is managed
+# via versions.json, not here.
+version: 2
+updates:
+  # Python deps for the custom Airflow base image (pyproject in /package).
+  - package-ecosystem: "pip"
+    directory: "/package"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      python-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # CI workflow actions.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      actions-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
