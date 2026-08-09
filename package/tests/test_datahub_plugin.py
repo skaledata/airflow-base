@@ -1,19 +1,23 @@
 """In-image checks for the baked-in DataHub Airflow plugin.
 
-Skipped on the host lint-and-test job — acryl-datahub-airflow-plugin is only
-installed in the built base image (via the Dockerfile), not a dependency of
-this package. Runs inside the image in the dockerfile-build matrix, where it
-guards the exact failure mode the setuptools-constraint tweak fixes: pip
-silently backtracking the plugin to an ancient Airflow-2-only 0.14.x release.
+Runs only inside the built base image (dockerfile-build matrix sets
+IN_IMAGE_BUILD=1), where acryl-datahub-airflow-plugin is installed — it's
+baked in via the Dockerfile, not a dependency of this package, so it's absent
+on the host lint-and-test job. The gate is an env var, NOT importorskip: a
+resolver backtrack to the ancient Airflow-2-only 0.14.x release can fail to
+import under Airflow 3, and importorskip would swallow that ImportError and
+silently skip — masking the exact failure these tests exist to catch.
 """
 
 from __future__ import annotations
 
+import os
 from importlib.metadata import entry_points, version
 
 import pytest
 
-pytest.importorskip("datahub_airflow_plugin")
+if not os.environ.get("IN_IMAGE_BUILD"):
+    pytest.skip("runs only inside the built base image", allow_module_level=True)
 
 
 def test_datahub_plugin_pinned_to_1_7_0() -> None:
@@ -32,11 +36,5 @@ def test_datahub_plugin_registers_airflow_entrypoint() -> None:
     # A pip-installed Airflow plugin is only discovered via an entry point;
     # confirm the package contributes one pointing at its own module (scan all
     # groups so this doesn't hard-code plugin-vs-listener registration details).
-    eps = entry_points()
-    refs = [
-        ep
-        for grp in eps.groups
-        for ep in eps.select(group=grp)
-        if "datahub_airflow_plugin" in ep.value
-    ]
+    refs = [ep for ep in entry_points() if "datahub_airflow_plugin" in ep.value]
     assert refs, "acryl-datahub-airflow-plugin registered no Airflow entry point"
