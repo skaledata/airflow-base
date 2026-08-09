@@ -27,6 +27,23 @@ COPY --chown=airflow:0 package/ /tmp/skale-airflow-plugins/
 RUN pip install --no-cache-dir /tmp/skale-airflow-plugins \
   && rm -rf /tmp/skale-airflow-plugins
 
+# DataHub Airflow plugin — emits Airflow lineage + operational metadata to a
+# DataHub instance. Baked in so a cluster's DataHub app receives lineage with
+# zero customer setup; inert unless the control plane sets the connection
+# (AIRFLOW_CONN_DATAHUB_REST_DEFAULT / AIRFLOW__DATAHUB__*).
+#
+# Airflow's constraints file pins setuptools==82.0.1, but current acryl-datahub
+# requires setuptools<82. Installed naively under the unmodified constraints,
+# pip resolves that conflict by silently BACKTRACKING the plugin to an ancient
+# Airflow-2-only 0.14.x release that would no-op (or fail) at runtime. setuptools
+# is build-tooling only, so dropping that one pin is the safe fix — every other
+# dependency stays held to Airflow's constraints (no dep-tree drift). Pinned to
+# an exact version so builds are reproducible and the backtrack can't sneak back.
+RUN curl -sfL "${SKALEDATA_AIRFLOW_CONSTRAINTS_URL}" | grep -v '^setuptools==' > /tmp/constraints-datahub.txt \
+  && pip install --no-cache-dir --constraint /tmp/constraints-datahub.txt \
+       "acryl-datahub-airflow-plugin==1.7.0" \
+  && rm /tmp/constraints-datahub.txt
+
 # Default FAB auth-manager config. SkaleData proxies validate the sdk_*
 # API key at the edge, so an inner login screen would just be noise.
 # Customers who want a stricter internal model override this by COPYing
@@ -92,5 +109,5 @@ ONBUILD RUN REQS=$(grep -v '^\s*#' /tmp/skaledata-onbuild/requirements.txt 2>/de
             fi && rm -rf /tmp/skaledata-onbuild
 
 LABEL org.opencontainers.image.source="https://github.com/skaledata/airflow-base"
-LABEL org.opencontainers.image.description="SkaleData-managed Airflow base image. Pre-installs skaledata-airflow-plugins (Airbyte bearer-auth shim) and auto-picks-up packages.txt + requirements.txt from the downstream build context (Astronomer-compatible convention)."
+LABEL org.opencontainers.image.description="SkaleData-managed Airflow base image. Pre-installs skaledata-airflow-plugins (Airbyte bearer-auth shim + SkaleDataAuthManager) and the acryl-datahub Airflow lineage plugin, and auto-picks-up packages.txt + requirements.txt from the downstream build context (Astronomer-compatible convention)."
 LABEL org.opencontainers.image.licenses="Apache-2.0"

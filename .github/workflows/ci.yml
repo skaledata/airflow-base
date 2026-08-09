@@ -112,6 +112,7 @@ jobs:
         run: |
           docker run --rm \
             --entrypoint /bin/bash \
+            -e IN_IMAGE_BUILD=1 \
             -v "$PWD/package:/pkg:ro" \
             skaledata-airflow-base:test \
             -c "pip install --user --no-cache-dir 'pytest>=8.0' && cd /pkg && python -m pytest tests -v -p no:cacheprovider"
