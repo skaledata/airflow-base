@@ -110,7 +110,7 @@ jobs:
           platforms: arm64
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           # Multi-arch so local dev on Apple Silicon works (`skale af start`
