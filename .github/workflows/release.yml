@@ -113,7 +113,6 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
           # Multi-arch so local dev on Apple Silicon works (`skale af start`
           # etc.). Customer clusters are all amd64 (GKE / EKS / AKS).
           platforms: linux/amd64,linux/arm64
@@ -121,6 +120,16 @@ jobs:
             AIRFLOW_VERSION=${{ matrix.airflow }}
             PYTHON_VERSION=${{ matrix.python }}
           tags: ${{ steps.tags.outputs.tags }}
+          # SKD-222: push with zstd layer compression. The Airflow base image is
+          # decompress-bound on pull — a 0.5-vCPU EKS Fargate microVM pulls the
+          # gzip base in ~86s; the same image re-compressed to zstd pulls in
+          # ~66s (~22% faster, measured), and zstd also speeds the EC2 KE-pool
+          # path. `force-compression` re-compresses the inherited apache/airflow
+          # layers too (incl. the ~502 MB layer that dominates), not just ours.
+          # zstd OCI media types are accepted by ghcr and by containerd on every
+          # target (EKS incl. Fargate, GKE, AKS) — verified on Fargate. Replaces
+          # the `push: true` shorthand (`outputs` sets push=true itself).
+          outputs: type=image,compression=zstd,compression-level=6,force-compression=true,push=true
           cache-from: type=gha,scope=airflow-${{ matrix.airflow }}-py${{ matrix.python }}
           cache-to: type=gha,mode=max,scope=airflow-${{ matrix.airflow }}-py${{ matrix.python }}
 
