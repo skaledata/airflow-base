@@ -68,7 +68,7 @@ jobs:
       # Build the base image and load it into the local docker daemon so the
       # downstream test below can reference it by tag.
       - name: Build base image (load locally)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
